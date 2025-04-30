@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Matcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <style>
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        .dropzone {
+            border: 2px dashed #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        .dropzone:hover, .dropzone.active {
+            border-color: #818cf8;
+            background-color: #eef2ff;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50">
+    <div class="max-w-6xl mx-auto px-4 py-12">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 mb-4">
+                AI Resume Matcher
+            </h1>
+            <p class="text-xl text-gray-600">
+                Match your resume with job descriptions and discover your perfect career fit
+            </p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Resume Upload -->
+            <div class="bg-white rounded-2xl shadow-xl p-8">
+                <div class="flex items-center mb-6">
+                    <svg class="text-indigo-600 w-8 h-8 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <h2 class="text-2xl font-bold text-gray-800">Resume</h2>
+                </div>
+                <div id="dropzone" class="dropzone rounded-xl p-10 text-center cursor-pointer">
+                    <svg id="upload-icon" class="w-16 h-16 mx-auto mb-4 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p id="upload-text" class="text-gray-600">
+                        Drop your resume or click to select (.txt, .pdf, .docx)
+                    </p>
+                </div>
+            </div>
+
+            <!-- Job Description -->
+            <div class="bg-white rounded-2xl shadow-xl p-8">
+                <div class="flex items-center mb-6">
+                    <svg class="text-indigo-600 w-8 h-8 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                    </svg>
+                    <h2 class="text-2xl font-bold text-gray-800">Job Description</h2>
+                </div>
+                <textarea
+                    id="job-description"
+                    class="w-full h-[250px] p-6 border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Paste the job description here..."
+                ></textarea>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error" class="hidden mt-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-center"></div>
+
+        <!-- Match Button -->
+        <div class="text-center mt-10">
+            <button
+                id="match-button"
+                disabled
+                class="inline-flex items-center px-8 py-4 rounded-full text-white font-semibold text-lg bg-gray-400 cursor-not-allowed"
+            >
+                Match Now
+                <svg class="ml-2 w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Results -->
+        <div id="results" class="hidden mt-16 bg-white rounded-2xl shadow-xl p-10">
+            <div class="flex items-center mb-8">
+                <svg class="text-indigo-600 w-10 h-10 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2l3 7h7l-6 4 3 7-7-4-7 4 3-7-6-4h7l3-7z"/>
+                </svg>
+                <h2 class="text-3xl font-bold text-gray-800">Match Results</h2>
+            </div>
+
+            <div class="mb-8 p-4 bg-indigo-50 rounded-xl">
+                <h3 class="text-xl font-bold text-gray-800 mb-2">Applied Role</h3>
+                <p id="job-role" class="text-indigo-700 font-medium"></p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <div>
+                    <h3 class="text-xl font-bold mb-4 text-gray-800">Match Score</h3>
+                    <div class="relative">
+                        <span id="score" class="text-2xl font-bold inline-block py-2 px-4 rounded-full text-white bg-gradient-to-r from-indigo-600 to-purple-600">
+                            0%
+                        </span>
+                        <div class="mt-4 h-3 rounded-full bg-gray-200">
+                            <div id="score-bar" class="h-3 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 transition-all duration-1000" style="width: 0%"></div>
+                        </div>
+                        <div class="mt-4 space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Skills Match:</span>
+                                <span id="skill-match-score" class="font-medium text-indigo-600">0%</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Text Similarity:</span>
+                                <span id="text-similarity-score" class="font-medium text-indigo-600">0%</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Experience Score:</span>
+                                <span id="experience-score" class="font-medium text-indigo-600">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-bold mb-4 text-gray-800">Matched Skills</h3>
+                    <div id="matched-skills" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-bold mb-4 text-gray-800">Missing Skills</h3>
+                    <div id="unmatched-skills" class="flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+
+            <!-- Experience Section -->
+            <div class="mt-8 p-6 bg-indigo-50 rounded-xl">
+                <h3 class="text-xl font-bold mb-4 text-gray-800">Experience Details</h3>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <p class="text-gray-600 mb-2">Years of Experience</p>
+                        <p id="years-experience" class="text-lg font-medium text-indigo-700">0 years</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600 mb-2">Detected Positions</p>
+                        <div id="detected-positions" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configure PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let resumeContent = null;
+        const dropzone = document.getElementById('dropzone');
+        const uploadText = document.getElementById('upload-text');
+        const jobDescription = document.getElementById('job-description');
+        const matchButton = document.getElementById('match-button');
+        const errorDiv = document.getElementById('error');
+        const resultsDiv = document.getElementById('results');
+
+        // Dropzone functionality
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => dropzone.classList.add('active'));
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => dropzone.classList.remove('active'));
+        });
+
+        async function extractTextFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let text = '';
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                text += content.items.map(item => item.str).join(' ') + '\n';
+            }
+            
+            return text;
+        }
+
+        async function extractTextFromDOCX(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            return result.value;
+        }
+
+        async function handleFile(file) {
+            try {
+                let text;
+                if (file.type === 'text/plain') {
+                    text = await file.text();
+                } else if (file.type === 'application/pdf') {
+                    text = await extractTextFromPDF(file);
+                } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    text = await extractTextFromDOCX(file);
+                } else {
+                    throw new Error('Please upload a .txt, .pdf, or .docx file');
+                }
+
+                resumeContent = text;
+                uploadText.innerHTML = `
+                    <div class="flex items-center justify-center text-green-600">
+                        <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        <p class="font-medium">Resume uploaded successfully!</p>
+                    </div>
+                `;
+                updateMatchButton();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        dropzone.addEventListener('drop', e => {
+            const file = e.dataTransfer.files[0];
+            handleFile(file);
+        });
+
+        dropzone.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.txt,.pdf,.docx';
+            input.onchange = e => handleFile(e.target.files[0]);
+            input.click();
+        });
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+        }
+
+        function updateMatchButton() {
+            const isReady = resumeContent && jobDescription.value.trim();
+            matchButton.disabled = !isReady;
+            matchButton.className = `inline-flex items-center px-8 py-4 rounded-full text-white font-semibold text-lg transition-all duration-300 ${
+                isReady 
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-105 hover:shadow-lg' 
+                    : 'bg-gray-400 cursor-not-allowed'
+            }`;
+        }
+
+        jobDescription.addEventListener('input', updateMatchButton);
+
+        function analyzeMatch(resumeText, jobText) {
+            // Convert texts to lowercase for case-insensitive matching
+            const resumeLower = resumeText.toLowerCase();
+            const jobLower = jobText.toLowerCase();
+
+            // Define skills with their variations
+            const skillVariations = {
+                'javascript': ['javascript', 'js', 'jsx'],
+                'python': ['python', 'py'],
+                'react': ['react', 'reactjs'],
+                'node': ['node', 'nodejs', 'node.js'],
+                'typescript': ['typescript', 'ts'],
+                'java': ['java', 'java8', 'java11'],
+                'sql': ['sql', 'mysql', 'postgresql', 'sql server'],
+                'aws': ['aws', 'amazon web services'],
+                'docker': ['docker', 'containerization'],
+                'kubernetes': ['kubernetes', 'k8s'],
+                'c++': ['c++', 'cpp'],
+                'c#': ['c#', 'csharp', 'c sharp']
+            };
+
+            // Find required skills in job description
+            const requiredSkills = Object.entries(skillVariations)
+                .filter(([skill, variations]) => 
+                    variations.some(variant => jobLower.includes(variant))
+                )
+                .map(([skill]) => skill);
+
+            if (requiredSkills.length === 0) {
+                return {
+                    score: 0,
+                    matched_skills: [],
+                    unmatched_skills: []
+                };
+            }
+
+            // Find matched skills in resume
+            const matchedSkills = requiredSkills.filter(skill => 
+                skillVariations[skill].some(variant => resumeLower.includes(variant))
+            );
+
+            // Calculate unmatched skills
+            const unmatchedSkills = requiredSkills.filter(skill => 
+                !skillVariations[skill].some(variant => resumeLower.includes(variant))
+            );
+
+            // Calculate score based on matched skills divided by total required skills
+            const score = matchedSkills.length / requiredSkills.length;
+
+            return {
+                score: score,
+                matched_skills: matchedSkills,
+                unmatched_skills: unmatchedSkills
+            };
+        }
+
+        async function matchResume() {
+            if (!resumeContent || !jobDescription.value.trim()) {
+                showError('Please provide both resume and job description');
+                return;
+            }
+
+            // Disable button and show loading state
+            matchButton.disabled = true;
+            matchButton.innerHTML = `
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                Analyzing...
+            `;
+
+            try {
+                const response = await fetch('/match', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        resume_text: resumeContent,
+                        job_description: jobDescription.value.trim()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to process the match');
+                }
+
+                // Extract and set job role
+                const jobText = jobDescription.value;
+                let role = 'Not specified';
+
+                // Common job title patterns
+                const rolePatterns = [
+                    /(?:for|hiring|seeking|looking for)(?: a)? ([^.]+?(developer|engineer|architect|designer|manager|consultant|analyst|specialist)[^.]*)/i,
+                    /^([^.]+?(developer|engineer|architect|designer|manager|consultant|analyst|specialist)[^.]*)/i,
+                    /position:?\s*([^.]+?(developer|engineer|architect|designer|manager|consultant|analyst|specialist)[^.]*)/i,
+                    /title:?\s*([^.]+?(developer|engineer|architect|designer|manager|consultant|analyst|specialist)[^.]*)/i,
+                    /role:?\s*([^.]+?(developer|engineer|architect|designer|manager|consultant|analyst|specialist)[^.]*)/i
+                ];
+
+                for (const pattern of rolePatterns) {
+                    const match = jobText.match(pattern);
+                    if (match) {
+                        role = match[1].trim()
+                            .replace(/[^\w\s-]/g, '') // Remove special characters
+                            .replace(/\s+/g, ' ')     // Normalize spaces
+                            .replace(/^\w/, c => c.toUpperCase()); // Capitalize first letter
+                        break;
+                    }
+                }
+
+                // If no specific role found, try to extract from the first line
+                if (role === 'Not specified') {
+                    const firstLine = jobText.split('\n')[0].trim();
+                    if (firstLine.length > 0 && firstLine.length < 100) { // Reasonable title length
+                        role = firstLine
+                            .replace(/[^\w\s-]/g, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                    }
+                }
+
+                document.getElementById('job-role').textContent = role;
+
+                // Update score
+                const score = document.getElementById('score');
+                const scoreBar = document.getElementById('score-bar');
+                score.textContent = `${Math.round(data.score)}%`;
+                scoreBar.style.width = `${Math.round(data.score)}%`;
+
+                // Update detailed scores
+                document.getElementById('skill-match-score').textContent = 
+                    `${Math.round(data.skill_match_percentage || 0)}%`;
+                document.getElementById('text-similarity-score').textContent = 
+                    `${Math.round(data.text_similarity_percentage || 0)}%`;
+                document.getElementById('experience-score').textContent = 
+                    `${Math.round(data.experience_score || 0)}%`;
+
+                // Update matched skills
+                const matchedSkills = document.getElementById('matched-skills');
+                matchedSkills.innerHTML = (data.matched_skills || [])
+                    .map(skill => `<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">${skill}</span>`)
+                    .join('');
+
+                // Update missing skills
+                const unmatchedSkills = document.getElementById('unmatched-skills');
+                unmatchedSkills.innerHTML = (data.missing_skills || [])
+                    .map(skill => `<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">${skill}</span>`)
+                    .join('');
+
+                // Update experience details
+                if (data.experience) {
+                    document.getElementById('years-experience').textContent = 
+                        `${data.experience.years} year${data.experience.years !== 1 ? 's' : ''}`;
+                    
+                    const detectedPositions = document.getElementById('detected-positions');
+                    detectedPositions.innerHTML = (data.experience.positions || [])
+                        .map(position => `<div class="text-indigo-700">${position}</div>`)
+                        .join('');
+                }
+
+                // Show results
+                resultsDiv.classList.remove('hidden');
+                resultsDiv.scrollIntoView({ behavior: 'smooth' });
+
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                // Reset button state
+                matchButton.disabled = false;
+                matchButton.innerHTML = `
+                    Match Now
+                    <svg class="ml-2 w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                        <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                `;
+            }
+        }
+
+        matchButton.addEventListener('click', matchResume);
+    </script>
+</body>
+</html>
